@@ -9,7 +9,6 @@ GenerateSeatingPlan.py
 
 :copyright: (c) 2010-2012 by Karl Voit <Karl.Voit@IST.TUGraz.at>
 :license: GPL v2 or any later version
-:bugreports: <Karl.Voit@IST.TUGraz.at>
 
 See USAGE below for details!
 
@@ -93,17 +92,20 @@ HS_i12 = {'rows': 10,
         'columns': 13,
         'name': "Hoersaal i12",
         'seatstoomit': [[10, 6], [10, 7], [10, 8], [10, 11], [10, 12], [10, 13]]}
+        #'seatstoomit': [[10, 6], [10, 7], [10, 8]]}
 
 HS_i13 = {'rows': 14,
         'columns': 22,
         'name': "Hoersaal i13",
-        'seatstoomit': [[14, 10], [14, 11], [14, 12], [14, 13]]}
-        
+        'seatstoomit': [[14, 10], [14, 11], [14, 12], [14, 13],
+                        [15,20],[15,21],[15,22], # no chair
+        ]}
+
 HS_i14 = {'rows': 9,
         'columns': 4,
         'name': "Hoersaal i14",
         'seatstoomit': []}
-        
+
 
 ## RB 20140119, not checked
 HS_A = {
@@ -122,12 +124,12 @@ HS_D = {'rows': 6,
         'columns': 10,
         'name': "Hoersaal D",
         'seatstoomit': [[6,9], [6,10] ]}
-        
+
 HS_G = {'rows': 12,
         'columns': 20,
         'name': "Hoersaal G",
         'seatstoomit': []}
-        
+
 
 ## RB 20130527. Checked 20140120.
 ## First row does not have tables
@@ -280,9 +282,21 @@ parser.add_option("-q", "--quiet", dest="quiet", action="store_true",
 parser.add_option("--checklist", dest="checklist", action="store_true",
                   help="creates a list of students orderd by seat")
 
+parser.add_option("--suffix", dest="filenamesuffix",
+                  help="added suffix for filename (e.g. '_termin_20170102", metavar="STR")
+
+parser.add_option("--title", dest="title",
+                  help="add identifier for Lecture Name or time slot...", metavar="STR")
 
 (options, args) = parser.parse_args()
 
+if options.filenamesuffix:
+    FILENAME_MAIN_BY_LASTNAME_WITHOUT_EXTENSION = FILENAME_MAIN_BY_LASTNAME_WITHOUT_EXTENSION + str(options.filenamesuffix)
+    FILENAME_MAIN_BY_SEATS_WITHOUT_EXTENSION = FILENAME_MAIN_BY_SEATS_WITHOUT_EXTENSION + str(options.filenamesuffix)
+    FILENAME_MAIN_TABLE_WITHOUT_EXTENSION = FILENAME_MAIN_TABLE_WITHOUT_EXTENSION + str(options.filenamesuffix)
+
+if options.title:
+    SEATING_PLAN_TITLE = options.title
 
 class vk_FileNotFoundException(Exception):
 
@@ -308,7 +322,7 @@ def handle_logging():
 
 
 def ReadInStudentsFromCsv(csvfilename):
-
+    # FIXXX
     csvReader = csv.DictReader(open(csvfilename), delimiter=';', quotechar='"')
     students_list = []
 
@@ -516,13 +530,17 @@ def GenerateTextfileSortedByStudentLastname(lecture_room, list_of_students_with_
 
     file.write("               Seating plan     " + lecture_room['name'] + "      by last name\n\n")
 
-    for student in list_of_students_with_seats:
-        file.write(student['FAMILY_NAME_OF_STUDENT'].ljust(25, '.') + \
-            student['FIRST_NAME_OF_STUDENT'].ljust(20, '.') + \
-            student['REGISTRATION_NUMBER'][:4] + 'XXX'.ljust(10, '.') + \
-            "  row " + str(student['seat'][0]).rjust(3) + "/" + str(chr(64 + student['seat'][0])) + \
-            "  seat " + str(student['seat'][1]).rjust(3) + "\n\n")
-
+    filler = " "
+    for student in list_of_students_with_seats: # FIXXXXXME Bug utf8 chars are counted as 2 chars and dots are omitted
+        file.write("{lastname:25}{filler}{firstname:23}{filler}{mnr:^10} row {row:>5} seat {seat:>3}".format(
+            filler=filler,
+            lastname=student['FAMILY_NAME_OF_STUDENT'].ljust(25,filler),
+            firstname=student['FIRST_NAME_OF_STUDENT'].ljust(23,filler),
+            mnr=(student['REGISTRATION_NUMBER'][:4] + 'XXX').ljust(10,filler),
+            row="{row}/{rowchar}".format(row=str(student['seat'][0]),rowchar=str(chr(64 + student['seat'][0]))),
+            seat=str(student['seat'][1]).rjust(3) + "\n" + "-"*80 + "\n"
+            )
+            )
 
 def GenerateLatexfileSortedByStudentLastname(lecture_room, list_of_students_with_seats):
     # well we need to sort the student list if the function name says so!
@@ -554,7 +572,7 @@ def GenerateHtmlFileWithTableFormat(lecture_room, list_of_students_with_seats):
     htmlfile.write('<head>\n')
     htmlfile.write(' 	<title>Seating Plan</title>\n')
     htmlfile.write('	<meta http-equiv="content-type"\n')
-    htmlfile.write('		content="text/html;charset=iso-8859-1" />\n')
+    htmlfile.write('		content="text/html;charset=UTF-8" />\n')
     htmlfile.write('		<STYLE type="text/css">\n')
     htmlfile.write('		table {table-layout: fixed;}\n')
     htmlfile.write('    td {border: 1px solid #000000; text-align: center; width: 100px; font-size: 10pt; height: 60px; %s}\n' \
@@ -659,7 +677,7 @@ def GenerateLatexMainFileSortedByLastname(lecture_room):
 
     content = '''\\documentclass[%
 14pt,%
-a4paper,%
+%a4paper,%
 oneside,%
 headinclude,%
 footexclude,%
@@ -667,10 +685,12 @@ openright%
 ]{scrartcl}
 
 %% encoding:
-\\usepackage[ansinew]{inputenc}
-\\usepackage{ucs}
-%\\usepackage[utf8x]{inputenc}  %% Sorry, problems with Umlauts in CSV forced me to stay at ansinew
-
+%\\usepackage[ansinew]{inputenc}
+%\\usepackage{ucs}
+\\usepackage[utf8x]{inputenc}  %% Sorry, problems with Umlauts in CSV forced me to stay at ansinew
+%\\usepackage[utf8]{inputenc}
+%\\usepackage[T1]{fontenc}
+\\usepackage[ngerman]{babel} % Sprache
 %% use up as much space as possible:
 \\usepackage{savetrees}
 
@@ -701,7 +721,7 @@ openright%
 \\clearscrheadings
 \\clearscrplain
 \\ifoot{\\scriptsize{}page~\\pagemark}
-\\ofoot{\\tiny{}Generated using GenerateSeatingPlan.py by Karl Voit}
+%\\ofoot{\\tiny{}Generated using GenerateSeatingPlan.py by Karl Voit}
 
 \\begin{document}
 
@@ -710,11 +730,12 @@ openright%
 }%%
 
 \\sffamily
-\\newcommand{\\vkHeaderSettings}{\\bf\\large }
+\\newcommand{\\vkHeaderSettings}[1]{\\textbf{\\large{#1}}}
 
 \\begin{longtable}{lllrr}
+\\multicolumn{5}{c}{\\scshape\\Large ''' + SEATING_PLAN_TITLE + '''} \\\\[5pt]
 \\multicolumn{5}{c}{\\scshape\\Large Seating Plan ''' + lecture_room['name'] + '''} \\\\[5pt]
-\\multicolumn{2}{c}{\\vkHeaderSettings Name} & {\\vkHeaderSettings Matr.} & \\multicolumn{1}{c}{\\vkHeaderSettings Row} & {\\vkHeaderSettings Seat}  \\\\[5pt]
+\\multicolumn{2}{c}{\\vkHeaderSettings{Name}} & {\\vkHeaderSettings{Matr.Nr.}} & \\multicolumn{1}{c}{\\vkHeaderSettings{Row}} & {\\vkHeaderSettings{Seat}}  \\\\[5pt]
 \\hline
 \\hline \\\\[-5pt]
 \\endhead
@@ -728,7 +749,7 @@ openright%
 
     file = open(FILENAME_MAIN_BY_LASTNAME_WITHOUT_EXTENSION + '.tex', 'w')
 
-    file.write(content)
+    file.write(content.encode('utf8'))
     file.flush()
     os.fsync(file.fileno())
 
@@ -747,9 +768,9 @@ openright%
 ]{scrartcl}
 
 %% encoding:
-\\usepackage[ansinew]{inputenc}
-\\usepackage{ucs}
-%\\usepackage[utf8x]{inputenc}  %% Sorry, problems with Umlauts in CSV forced me to stay at ansinew
+%\\usepackage[ansinew]{inputenc}
+%\\usepackage{ucs}
+\\usepackage[utf8x]{inputenc}  %% Sorry, problems with Umlauts in CSV forced me to stay at ansinew
 
 %% use up as much space as possible:
 \\usepackage{savetrees}
@@ -782,16 +803,16 @@ openright%
 \\clearscrplain
 \\chead{Exam Checklist of Lecture Room ''' + lecture_room['name'] + '''}
 \\ifoot{\\scriptsize{}page~\\pagemark}
-\\ofoot{\\tiny{}Generated using GenerateSeatingPlan.py by Karl Voit}
+%\\ofoot{\\tiny{}Generated using GenerateSeatingPlan.py by Karl Voit}
 
 \\begin{document}
 
 \\newcommand{\\vkExamStudent}[6]{%%
-\\makebox[\\linewidth][l]{$\\bigcirc$~#2~{\\bf{}#1};~#3,~R#4~S#6}\\\\[3mm]%%
+\\makebox[\\linewidth][l]{$\\bigcirc$~#2~{\\textbf{{#1}}};~#3,~R#4~S#6}\\\\[3mm]%%
 }%%
 
 \\sffamily
-\\newcommand{\\vkHeaderSettings}{\\bf }
+\\newcommand{\\vkHeaderSettings}[1]{\\textbf{#1} }
 
 \\input{''' + TEMP_FILENAME_STUDENTS_BY_SEATS_TEXFILE + '''}
 
@@ -925,7 +946,7 @@ def main():
     logging.debug("Student CSV file found")
 
     list_of_students = ReadInStudentsFromCsv(options.students_csv_file)
-
+    print list_of_students[0]
     #logging.info("Number of students:  %s" % str(len(list_of_students)))
     print "Number of students:  %s" % str(len(list_of_students))
 
