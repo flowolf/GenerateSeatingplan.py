@@ -329,6 +329,8 @@ def ReadInStudentsFromCsv(csvfilename):
     for row in csvReader:
         students_list.append(row)
 
+    for student in students_list:
+        student["REGISTRATION_NUMBER"] = student["REGISTRATION_NUMBER"].replace("#","\\#")
     return students_list
 
 
@@ -536,7 +538,7 @@ def GenerateTextfileSortedByStudentLastname(lecture_room, list_of_students_with_
             filler=filler,
             lastname=student['FAMILY_NAME_OF_STUDENT'].ljust(25,filler),
             firstname=student['FIRST_NAME_OF_STUDENT'].ljust(23,filler),
-            mnr=(student['REGISTRATION_NUMBER'][:4] + 'XXX').ljust(10,filler),
+            mnr=(student['REGISTRATION_NUMBER'][:-3].replace("\\","") + 'XXX').ljust(10,filler),
             row="{row}/{rowchar}".format(row=str(student['seat'][0]),rowchar=str(chr(64 + student['seat'][0]))),
             seat=str(student['seat'][1]).rjust(3) + "\n" + "-"*80 + "\n"
             )
@@ -551,7 +553,7 @@ def GenerateLatexfileSortedByStudentLastname(lecture_room, list_of_students_with
     for student in list_of_students_with_seats:
         file.write("\\vkExamStudent{" + student['FAMILY_NAME_OF_STUDENT'] + '}{' + \
             student['FIRST_NAME_OF_STUDENT'] + '}{' + \
-            student['REGISTRATION_NUMBER'][:4] + 'XXX}{' + \
+            student['REGISTRATION_NUMBER'][:-3] + 'XXX}{' + \
             str(student['seat'][0]) + '}{' + \
             str(chr(64 + student['seat'][0])) + '}{' + \
             str(student['seat'][1]) + '}' + "\n")
@@ -610,7 +612,7 @@ def GenerateHtmlFileWithTableFormat(lecture_room, list_of_students_with_seats):
                 seat_class = 'occupied'
                 seat_data = student['FAMILY_NAME_OF_STUDENT'] + \
                     '<br />' + student['FIRST_NAME_OF_STUDENT'] + \
-                    '<br />' + student['REGISTRATION_NUMBER'][:4] + 'XXX'
+                    '<br />' + student['REGISTRATION_NUMBER'][:-3] + 'XXX'
             htmlfile.write('<td class="%s">%s</td>' % (seat_class, seat_data))
         htmlfile.write('\n</tr>\n')
     htmlfile.write('</table>')
